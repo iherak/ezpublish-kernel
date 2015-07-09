@@ -9,12 +9,14 @@
 
 namespace eZ\Publish\Core\FieldType\DateAndTime;
 
-use eZ\Publish\Core\FieldType\FieldType;
 use eZ\Publish\Core\Base\Exceptions\InvalidArgumentType;
-use DateTime;
+use eZ\Publish\Core\FieldType\FieldType;
 use eZ\Publish\Core\FieldType\ValidationError;
-use eZ\Publish\SPI\FieldType\Value as SPIValue;
 use eZ\Publish\Core\FieldType\Value as BaseValue;
+use eZ\Publish\SPI\FieldType\Value as SPIValue;
+use Symfony\Component\Translation\TranslatorInterface;
+use DateInterval;
+use DateTime;
 
 class Type extends FieldType
 {
@@ -46,6 +48,16 @@ class Type extends FieldType
     );
 
     /**
+     * @var TranslatorInterface For translating error message which refers to form elements
+     */
+    private $translator;
+
+    public function __construct( TranslatorInterface $translator )
+    {
+        $this->translator = $translator;
+    }
+
+/**
      * Returns the field type identifier for this field type
      *
      * @return string
@@ -261,21 +273,26 @@ class Type extends FieldType
                     case "dateInterval":
                         if ( isset( $value ) )
                         {
-                            if ( isset( $fieldSettings["defaultType"] ) &&
-                                $fieldSettings["defaultType"] !== self::DEFAULT_CURRENT_DATE_ADJUSTED )
+                            if ( $value instanceof \DateInterval )
                             {
-                                $validationErrors[] = new ValidationError(
-                                    "Setting '%setting%' can be used only when setting '%defaultType%' is set to '%DEFAULT_CURRENT_DATE_ADJUSTED%'",
-                                    null,
-                                    array(
-                                        "setting" => $name,
-                                        "defaultType" => "defaultType",
-                                        "DEFAULT_CURRENT_DATE_ADJUSTED" => "DEFAULT_CURRENT_DATE_ADJUSTED"
-                                    ),
-                                    "[$name]"
-                                );
+                                // String conversion of $value, because DateInterval objects cannot be compared directly
+                                if ( isset( $fieldSettings["defaultType"] )
+                                    && $fieldSettings["defaultType"] !== self::DEFAULT_CURRENT_DATE_ADJUSTED
+                                    && $value->format( "%y%m%d%h%i%s" ) !== "000000" )
+                                {
+                                    $validationErrors[] = new ValidationError(
+                                        "Setting '%setting%' can be used only when setting '%defaultType%' is set to '%DEFAULT_CURRENT_DATE_ADJUSTED%'",
+                                        null,
+                                        array(
+                                            "setting" => $this->translator->trans( "field_definition.ezdatetime.date_interval", [], 'ezrepoforms_content_type' ),
+                                            "defaultType" => $this->translator->trans( "field_definition.ezdatetime.default_type", [], 'ezrepoforms_content_type' ),
+                                            "DEFAULT_CURRENT_DATE_ADJUSTED" => $this->translator->trans( "field_definition.ezdatetime.default_type_adjusted", [], 'ezrepoforms_content_type' ),
+                                        ),
+                                        "[$name]"
+                                    );
+                                }
                             }
-                            else if ( !( $value instanceof \DateInterval ) )
+                            else
                             {
                                 $validationErrors[] = new ValidationError(
                                     "Setting '%setting%' value must be an instance of 'DateInterval' class",

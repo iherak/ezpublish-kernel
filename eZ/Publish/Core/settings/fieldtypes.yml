@@ -309,6 +309,7 @@ services:
 
     ezpublish.fieldType.ezdatetime:
         class: %ezpublish.fieldType.ezdatetime.class%
+        arguments: [@translator]
         parent: ezpublish.fieldType
         tags:
             - {name: ezpublish.fieldType, alias: ezdatetime}
