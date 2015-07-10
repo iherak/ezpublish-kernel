@@ -69,6 +69,25 @@ class SearchService implements SearchServiceInterface
     }
 
     /**
+     * Finds contentInfo objects for the given query.
+     *
+     * @see SearchServiceInterface::findContentInfo()
+     *
+     * @since 5.4.4
+     * @throws \eZ\Publish\API\Repository\Exceptions\InvalidArgumentException if query is not valid
+     *
+     * @param \eZ\Publish\API\Repository\Values\Content\Query $query
+     * @param array $languages List of languages, can also optionally specify key 'useAlwaysAvailable'
+     * @param boolean $filterOnUserPermissions if true (default) only the objects which is the user allowed to read are returned.
+     *
+     * @return \eZ\Publish\API\Repository\Values\Content\Search\SearchResult
+     */
+    public function findContentInfo( Query $query, array $languages = array(), $filterOnUserPermissions = true )
+    {
+        return $this->service->findContentInfo( $query, $languages, $filterOnUserPermissions );
+    }
+
+    /**
      * Performs a query for a single content object
      *
      * @throws \eZ\Publish\API\Repository\Exceptions\NotFoundException if the object was not found by the query or due to permissions

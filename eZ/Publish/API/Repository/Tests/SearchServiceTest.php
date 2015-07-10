@@ -11,9 +11,10 @@ namespace eZ\Publish\API\Repository\Tests;
 
 use eZ\Publish\API\Repository\Tests\SetupFactory\LegacyElasticsearch;
 use eZ\Publish\API\Repository\Tests\SetupFactory\LegacySolr;
-use eZ\Publish\Core\Repository\Values\Content\Content;
+use eZ\Publish\API\Repository\Values\Content\Content;
+use eZ\Publish\API\Repository\Values\Content\ContentInfo;
 use eZ\Publish\API\Repository\Values\Content\Query;
-use eZ\Publish\Core\Repository\Values\Content\Location;
+use eZ\Publish\API\Repository\Values\Content\Location;
 use eZ\Publish\API\Repository\Values\Content\LocationQuery;
 use eZ\Publish\API\Repository\Values\Content\Query\Criterion;
 use eZ\Publish\API\Repository\Values\Content\Query\SortClause;
@@ -755,6 +756,18 @@ class SearchServiceTest extends BaseTest
     }
 
     /**
+     * Test for the findContentInfo() method.
+     *
+     * @dataProvider getFilterContentSearches
+     * @see \eZ\Publish\API\Repository\SearchService::findContentInfo()
+     */
+    public function testFindContentInfoFiltered( $queryData, $fixture, $closure = null )
+    {
+        $query = new Query( $queryData );
+        $this->assertQueryFixture( $query, $fixture, $this->getContentInfoFixtureClosure( $closure ), true );
+    }
+
+    /**
      * Test for the findLocations() method.
      *
      * @dataProvider getFilterContentSearches
@@ -797,6 +810,18 @@ class SearchServiceTest extends BaseTest
     {
         $query = new Query( $queryData );
         $this->assertQueryFixture( $query, $fixture, $closure );
+    }
+
+    /**
+     * Test for the findContentInfo() method.
+     *
+     * @dataProvider getContentQuerySearches
+     * @see \eZ\Publish\API\Repository\SearchService::findContent()
+     */
+    public function testQueryContentInfo( $queryData, $fixture, $closure = null )
+    {
+        $query = new Query( $queryData );
+        $this->assertQueryFixture( $query, $fixture, $this->getContentInfoFixtureClosure( $closure ), true );
     }
 
     /**
@@ -1026,7 +1051,7 @@ class SearchServiceTest extends BaseTest
     /**
      * Create test Content with ezcountry field having multiple countries selected.
      *
-     * @return \eZ\Publish\API\Repository\Values\Content\Content
+     * @return Content
      */
     protected function createMultipleCountriesContent()
     {
@@ -1651,7 +1676,7 @@ class SearchServiceTest extends BaseTest
      * @param int $fieldValue2 Value for non translatable field
      * @param string $mainLanguageCode
      *
-     * @return \eZ\Publish\API\Repository\Values\Content\Content
+     * @return Content
      */
     protected function createMultilingualContent(
         $contentType,
@@ -2231,6 +2256,18 @@ class SearchServiceTest extends BaseTest
     }
 
     /**
+     * Test for the findContentInfo() method.
+     *
+     * @dataProvider getSortedContentSearches
+     * @see \eZ\Publish\API\Repository\SearchService::findContentInfo()
+     */
+    public function testFindAndSortContentInfo( $queryData, $fixture, $closure = null )
+    {
+        $query = new Query( $queryData );
+        $this->assertQueryFixture( $query, $fixture, $this->getContentInfoFixtureClosure( $closure ), true );
+    }
+
+    /**
      * Test for the findContent() method.
      *
      * @deprecated
@@ -2513,6 +2550,17 @@ class SearchServiceTest extends BaseTest
     public function testFindFacettedContent( Query $query, $fixture )
     {
         $this->assertQueryFixture( $query, $fixture );
+    }
+
+    /**
+     * Test for the findContentInfo() method.
+     *
+     * @dataProvider getFacettedSearches
+     * @see \eZ\Publish\API\Repository\SearchService::findContentInfo()
+     */
+    public function testFindFacettedContentInfo( Query $query, $fixture )
+    {
+        $this->assertQueryFixture( $query, $fixture, $this->getContentInfoFixtureClosure(), true );
     }
 
     /**
@@ -4392,10 +4440,11 @@ class SearchServiceTest extends BaseTest
      * @param Query $query
      * @param string $fixture
      * @param null|callable $closure
+     * @param bool $info
      *
      * @return void
      */
-    protected function assertQueryFixture( Query $query, $fixture, $closure = null, $ignoreScore = true )
+    protected function assertQueryFixture( Query $query, $fixture, $closure = null, $ignoreScore = true, $info = false )
     {
         $repository    = $this->getRepository();
         $searchService = $repository->getSearchService();
@@ -4420,7 +4469,10 @@ class SearchServiceTest extends BaseTest
             }
             else if ( $query instanceof Query )
             {
-                $result = $searchService->findContent( $query );
+                if ( $info )
+                    $result = $searchService->findContentInfo( $query );
+                else
+                    $result = $searchService->findContent( $query );
             }
             else
             {
@@ -4531,16 +4583,17 @@ class SearchServiceTest extends BaseTest
             switch ( true )
             {
                 case $hit->valueObject instanceof Content:
+                case $hit->valueObject instanceof Location:
                     $hit->valueObject = array(
                         'id'    => $hit->valueObject->contentInfo->id,
                         'title' => $hit->valueObject->contentInfo->name,
                     );
                     break;
 
-                case $hit->valueObject instanceof Location:
+                case $hit->valueObject instanceof ContentInfo:
                     $hit->valueObject = array(
-                        'id' => $hit->valueObject->contentInfo->id,
-                        'title' => $hit->valueObject->contentInfo->name,
+                        'id'    => $hit->valueObject->id,
+                        'title' => $hit->valueObject->name,
                     );
                     break;
 
@@ -4558,5 +4611,32 @@ class SearchServiceTest extends BaseTest
     protected function getFixtureDir()
     {
         return __DIR__ . '/_fixtures/' . getenv( "fixtureDir" ) . '/';
+    }
+
+    /**
+     * For findContentInfo tests, to reuse fixtures for findContent tests.
+     *
+     * @param null|callable $closure
+     *
+     * @return callable
+     */
+    private function getContentInfoFixtureClosure( $closure = null )
+    {
+        /** @var $data \eZ\Publish\API\Repository\Values\Content\Search\SearchResult */
+        return function ( &$data ) use ( $closure )
+        {
+            foreach ( $data->searchHits as $searchHit )
+            {
+                if ( $searchHit->valueObject instanceof Content )
+                {
+                    $searchHit->valueObject = $searchHit->valueObject->getVersionInfo()->getContentInfo();
+                }
+            }
+
+            if ( isset( $closure ) )
+            {
+                $closure( $data );
+            }
+        };
     }
 }

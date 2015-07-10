@@ -109,6 +109,80 @@ class SearchService implements SearchServiceInterface
      */
     public function findContent( Query $query, array $fieldFilters = array(), $filterOnUserPermissions = true )
     {
+        $contentService = $this->repository->getContentService();
+        $result = $this->internalFindContent( $query, $fieldFilters, $filterOnUserPermissions );
+        foreach ( $result->searchHits as $hit )
+        {
+            // As we get ContentInfo from SPI, we need to load full content (avoids getting stale content data)
+            $hit->valueObject = $contentService->internalLoadContent(
+                $hit->valueObject->id,
+                ( !empty( $fieldFilters['languages'] ) ? $fieldFilters['languages'] : null ),
+                null,
+                false,
+                ( isset( $fieldFilters['useAlwaysAvailable'] ) ? $fieldFilters['useAlwaysAvailable'] : true )
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Finds contentInfo objects for the given query.
+     *
+     * @see SearchServiceInterface::findContentInfo()
+     *
+     * @since 5.4.4
+     * @throws \eZ\Publish\API\Repository\Exceptions\InvalidArgumentException if query is not valid
+     *
+     * @param \eZ\Publish\API\Repository\Values\Content\Query $query
+     * @param array $languages List of languages, can optionally specify key 'useAlwaysAvailable' with a boolean value
+     * @param boolean $filterOnUserPermissions if true (default) only the objects which is the user allowed to read are returned.
+     *
+     * @return \eZ\Publish\API\Repository\Values\Content\Search\SearchResult
+     */
+    public function findContentInfo( Query $query, array $languages = array(), $filterOnUserPermissions = true )
+    {
+        // Map simplified $languages parameter to $fieldFilters
+        $fieldFilters = array();
+        if ( isset( $languages['useAlwaysAvailable'] ) )
+        {
+            $fieldFilters['useAlwaysAvailable'] = $languages['useAlwaysAvailable'];
+            unset( $languages['useAlwaysAvailable'] );
+        }
+
+        if ( !empty( $languages ) )
+        {
+            $fieldFilters['languages'] = $languages;
+        }
+
+        $result = $this->internalFindContent( $query, $fieldFilters, $filterOnUserPermissions );
+        foreach ( $result->searchHits as $hit )
+        {
+            $hit->valueObject = $this->domainMapper->buildContentInfoDomainObject(
+                $hit->valueObject
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Finds SPI contentInfo objects for the given query.
+     *
+     * Internal for use by {@link findContent} and {@link findContentInfo}.
+     *
+     * @throws \eZ\Publish\API\Repository\Exceptions\InvalidArgumentException if query is not valid
+     *
+     * @param \eZ\Publish\API\Repository\Values\Content\Query $query
+     * @param array $fieldFilters - a map of filters for the returned fields.
+     *        Currently supports: <code>array("languages" => array(<language1>,..), "useAlwaysAvailable" => bool)</code>
+     *                            useAlwaysAvailable defaults to true to avoid exceptions on missing translations.
+     * @param boolean $filterOnUserPermissions if true only the objects which is the user allowed to read are returned.
+     *
+     * @return \eZ\Publish\API\Repository\Values\Content\Search\SearchResult With "raw" SPI objects in result
+     */
+    protected function internalFindContent( Query $query, array $fieldFilters = array(), $filterOnUserPermissions = true )
+    {
         if ( !is_int( $query->offset ) )
         {
             throw new InvalidArgumentType(
@@ -140,21 +214,7 @@ class SearchService implements SearchServiceInterface
             return new SearchResult( array( 'time' => 0, 'totalCount' => 0 ) );
         }
 
-        $result = $this->searchHandler->findContent( $query, $fieldFilters );
-
-        $contentService = $this->repository->getContentService();
-        foreach ( $result->searchHits as $hit )
-        {
-            $hit->valueObject = $contentService->internalLoadContent(
-                $hit->valueObject->id,
-                ( !empty( $fieldFilters['languages'] ) ? $fieldFilters['languages'] : null ),
-                null,
-                false,
-                ( isset( $fieldFilters['useAlwaysAvailable'] ) ? $fieldFilters['useAlwaysAvailable'] : true )
-            );
-        }
-
-        return $result;
+        return $this->searchHandler->findContent( $query, $fieldFilters );
     }
 
     /**
